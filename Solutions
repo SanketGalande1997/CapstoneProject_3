@@ -1,3 +1,6 @@
+Solutions of Capstone Project SDET
+
+
 Scenario 1:
 
 1. The dependencies for implementing the scenario contains below MAVEN dependencies
@@ -217,7 +220,6 @@ def login(driver, username, password):
 #Running the tests
 
 pytest test_webapp.py
-
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Scenario 3:
 
