@@ -1,0 +1,285 @@
+Scenario 1:
+
+1. The dependencies for implementing the scenario contains below MAVEN dependencies
+
+<dependencies>
+    <!-- Selenium dependencies -->
+    <dependency>
+        <groupId>org.seleniumhq.selenium</groupId>
+        <artifactId>selenium-java</artifactId>
+        <version>3.141.59</version>
+    </dependency>
+
+    <!-- Apache POI dependencies -->
+    <dependency>
+        <groupId>org.apache.poi</groupId>
+        <artifactId>poi</artifactId>
+        <version>5.0.0</version>
+    </dependency>
+
+    <!-- TestNG dependencies -->
+    <dependency>
+        <groupId>org.testng</groupId>
+        <artifactId>testng</artifactId>
+        <version>7.4.0</version>
+    </dependency>
+</dependencies>
+
+2. BaseTest. java file
+
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+
+public class BaseTest {
+    protected WebDriver driver;
+
+    @BeforeMethod
+    public void setUp() {
+        
+        System.setProperty("webdriver.chrome.driver", "c/Intel/chromedriver");
+        driver = new ChromeDriver();
+        driver.manage().window().maximize();
+    }
+
+    @AfterMethod
+    public void tearDown() {
+        // Close the browser after each test
+        if (driver != null) {
+            driver.quit();
+        }
+    }
+}
+
+//Excel Data Provider
+
+import org.apache.poi.ss.usermodel.*;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+
+public class ExcelDataProvider {
+    private static final String FILE_PATH = "D/Project/InputData/testdata.xlsx";
+
+    public static Object[][] getTestData(String sheetName) {
+        Object[][] data = null;
+        try (FileInputStream fis = new FileInputStream(new File(FILE_PATH));
+             Workbook workbook = WorkbookFactory.create(fis)) {
+            Sheet sheet = workbook.getSheet(sheetName);
+            int rowCount = sheet.getLastRowNum();
+            int colCount = sheet.getRow(0).getLastCellNum();
+            data = new Object[rowCount][colCount];
+            for (int i = 1; i <= rowCount; i++) {
+                Row row = sheet.getRow(i);
+                for (int j = 0; j < colCount; j++) {
+                    Cell cell = row.getCell(j);
+                    data[i - 1][j] = cell.toString();
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return data;
+    }
+}
+
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
+
+public class LoginPage {
+    private WebDriver driver;
+
+    public LoginPage(WebDriver driver) {
+        this.driver = driver;
+    }
+
+    public void login(String username, String password) {
+        driver.findElement(By.id("user-name")).sendKeys(username);
+        driver.findElement(By.id("password")).sendKeys(password);
+        driver.findElement(By.id("login-button")).click();
+    }
+
+    public String getErrorMessage() {
+        return driver.findElement(By.cssSelector(".error-message-container h3")).getText();
+    }
+}
+
+
+//TestCases.java
+
+import org.openqa.selenium.WebDriver;
+import org.testng.Assert;
+import org.testng.annotations.DataProvider;
+import org.testng.annotations.Test;
+
+public class TestCases extends BaseTest {
+    private final String baseUrl = "https://www.saucedemo.com/";
+
+    @Test(dataProvider = "loginData")
+    public void loginTest(String username, String password, boolean isSuccess) {
+        driver.get(baseUrl);
+        LoginPage loginPage = new LoginPage(driver);
+        loginPage.login(username, password);
+
+        if (isSuccess) {
+            Assert.assertEquals(driver.getTitle(), "Swag Labs");
+        } else {
+            Assert.assertTrue(loginPage.getErrorMessage().contains("Epic sadface"));
+        }
+    }
+
+    @DataProvider(name = "loginData")
+    public Object[][] getLoginData() {
+        return ExcelDataProvider.getTestData("LoginData");
+    }
+}
+
+//testng.xml
+
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="TestSuite">
+    <test name="LoginTests">
+        <classes>
+            <class name="TestCases"/>
+        </classes>
+    </test>
+</suite>
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Scenario 2:
+
+#conftest.py
+
+import pytest
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.common.keys import Keys
+
+@pytest.fixture
+def driver(request):
+    # Set up WebDriver
+    chrome_path = "c/Intel/chromedriver"
+    service = ChromeService(chrome_path)
+    driver = webdriver.Chrome(service=service)
+    driver.implicitly_wait(10)
+
+    # Tear down the driver after the test
+    def teardown():
+        driver.quit()
+
+    request.addfinalizer(teardown)
+    return driver
+
+#test_webapp.py
+
+import pytest
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from openpyxl import load_workbook
+
+@pytest.mark.parametrize("username, password, expected_title, is_successful", [
+    ("standard_user", "secret_sauce", "Swag Labs", True),
+    ("locked_out_user", "invalid_password", "Sauce Labs", False),
+])
+def test_login(driver, username, password, expected_title, is_successful):
+   
+    driver.get("https://www.saucedemo.com/")
+
+   
+    login(driver, username, password)
+
+    if is_successful:
+        
+        assert driver.title == expected_title
+    else:
+        
+        error_message = WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.XPATH, "//h3[@data-test='error']"))
+        )
+        assert "Epic sadface" in error_message.text
+
+def login(driver, username, password):
+   
+    driver.find_element(By.ID, "user-name").send_keys(username)
+    driver.find_element(By.ID, "password").send_keys(password)
+
+    
+    driver.find_element(By.ID, "login-button").click()
+
+    
+    WebDriverWait(driver, 5).until(
+        EC.title_is("Swag Labs") or EC.title_is("Sauce Labs")
+    )
+
+#Running the tests
+
+pytest test_webapp.py
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Scenario 3:
+
+SOAP UI Project Steps:
+Create a new SOAP UI Project.
+Add a new Test Suite within the project.
+Add a new Test Case within the Test Suite.
+In the Test Case, add a new REST Request step.
+Set the request method to POST.
+Set the request URL to https://dummy.restapiexample.com/api/v1/create.
+In the request body, use the following JSON template:
+
+json
+
+
+{
+    "name": "${#TestCase#name}",
+    "salary": "${#TestCase#salary}",
+    "age": "${#TestCase#age}"
+}
+Add an Assertion to verify the response status and data.
+Test Case - Groovy Script Step:
+Add a new Groovy Script step in the Test Case to read data from an Excel Sheet and set it as properties.
+
+groovy
+
+import org.apache.poi.ss.usermodel.*;
+import java.io.FileInputStream;
+
+def excelFilePath = "D/Project/testdata.xlsx" 
+def sheetName = "TestData"
+
+// Load Excel file
+def fis = new FileInputStream(excelFilePath)
+def workbook = WorkbookFactory.create(fis)
+def sheet = workbook.getSheet(sheetName)
+
+// Read data from Excel and set properties
+def row = sheet.getRow(1) // Assuming the data starts from the second row
+testRunner.testCase.setPropertyValue("name", row.getCell(0).toString())
+testRunner.testCase.setPropertyValue("salary", row.getCell(1).toString())
+testRunner.testCase.setPropertyValue("age", row.getCell(2).toString())
+Assertions:
+Add an assertion to the REST Request step to verify the response status and data.
+
+groovy
+
+def response = testRunner.testCase.getTestStepByName("REST Request").getPropertyValue("response").toString()
+def jsonResponse = new groovy.json.JsonSlurper().parseText(response)
+
+// Verify response status
+assert jsonResponse.status == "success"
+
+// Verify response data
+def testData = jsonResponse.data
+assert testData.name == testRunner.testCase.getPropertyValue("name")
+assert testData.salary == testRunner.testCase.getPropertyValue("salary")
+assert testData.age == testRunner.testCase.getPropertyValue("age")
+Excel Sheet - TestData:
+name	salary	age
+John Doe	5000	30
+Jane Smith	6000	25
+
+
+
